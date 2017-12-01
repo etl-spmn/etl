@@ -3,10 +3,15 @@ import e/etl_top;
 
 // utility dummy structs
 struct packet {
-    is_valid: bool;
+    is_valid : bool;
+    addr     : byte;
 };
 struct compound_packet like packet {
     packets: list of packet;
+    keep packets.size() < 4;
+    keep for each in packets {
+        .addr == addr;
+    };
 };
 
 // vector
@@ -36,16 +41,19 @@ unit simple_scheduler {
 
 // linked_list
 // Good for inserting using iterator
-struct packet_queue like linked_list of packet {
+struct packet_linked_list like linked_list of packet {
     expand() is {
         var iter := get_iterator();
+        var packets: list of packet;
         while iter.has_next() {
             var p := iter.next();
             if p is a compound_packet (cp) {
-                for each in reverse cp.packets {
+                // remove the current compound one, and instaed - add the its sub packets 
+                packets = cp.packets;
+                iter.remove(); 
+                for each in reverse  packets {
                     iter.insert(it);
                 };
-                iter.remove(); // remove the current compound one;
             };
         };
     };
@@ -86,5 +94,103 @@ template struct simple_multi_map of (<key'type>, <value'type>) {
 
 
 
+
+'>
+
+
+<'
+
+unit env {
+    !packet          : packet;
+    !compound_packet : compound_packet;
+    
+    // vector, regular list
+    my_vector : vector of packet;
+    
+    demo_vector() @sys.any is {
+        out("\n   VECTOR \n   ------");
+        my_vector = new;
+        
+        for i from 0 to 5 {
+            wait cycle;
+            print my_vector;
+            gen packet;
+            my_vector.add(packet);
+        };
+    };
+    
+    scenario() @sys.any is {
+        raise_objection(TEST_DONE);
+        demo_vector();
+    };
+    
+    
+    // dequeue, fifo
+    !fifo : deque of packet;
+    
+    demo_queue() @sys.any is {
+        out("\n\n   DEQUE \n   -----");
+        fifo = new;
+        
+        for i from 0 to 5 {
+            wait cycle;
+            packet = new with {
+                .addr = i; .is_valid = TRUE;
+            };
+            fifo.add(packet);
+        };
+        print fifo.get_list();
+        wait cycle;
+        
+        for i from 0 to 5 {
+            packet = fifo.pop();
+            print packet;
+        };
+        
+        
+    };
+    scenario() @sys.any is also {
+        demo_queue();
+    };
+    
+    
+    // linked list
+    linked_list : packet_linked_list;
+    demo_linked_list() @sys.any is {
+        out("\n\n   LINKED LIST \n   ---------");
+        wait cycle;
+        
+        linked_list = new;
+        for i from 0 to 6 {
+            gen compound_packet keeping {
+                .addr == i; .is_valid == TRUE;
+            }; 
+            linked_list.add(compound_packet);
+        };
+        
+        print linked_list.get_list();
+        out("   call expand");
+        linked_list.expand();
+        print linked_list.get_list();
+    };
+    
+    scenario() @sys.any is also {
+        demo_linked_list();
+    };
+    
+
+    
+    scenario() @sys.any is also {
+        wait cycle;
+        drop_objection(TEST_DONE);
+    };
+    run() is also {
+        start scenario();
+    };
+};
+
+extend sys {
+    env : env is instance;
+};
 
 '>
